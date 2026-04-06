@@ -1,0 +1,45 @@
+// server.js
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const chatRoutes = require("./routes/chat/tunex");
+const media = require('./routes/media');
+const citiesRouter = require('./routes/cities/cities');
+
+const app = express();
+app.use(express.json());
+
+
+// CORS configuration
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+app.use(cors({ origin: CORS_ORIGIN }));
+
+
+
+// Routes de media
+app.use('/api', media);
+// Routes de villes
+app.use('/api/cities', citiesRouter);
+// Routes de chat
+app.use("/api/chat", chatRoutes);
+
+
+
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
+
+// Start the server
+const port = process.env.PORT || 5000;
+app.listen(port, () => console.log(`
+    
+    API listening on ${port}
+    Chat API: http://localhost:${port}/api/chat
+    Cities API: http://localhost:${port}/api/cities
+    Model: Llama 3.1-8B   
+    
+    ` 
+));
