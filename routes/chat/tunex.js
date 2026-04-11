@@ -5,6 +5,21 @@ const router = express.Router();
 const axios = require("axios");
 const tunisiaSystemPrompt = require("../../util/tunisiaPrompt");
 
+const DEFAULT_GITHUB_MODELS_API_ENDPOINT = "https://models.inference.ai.azure.com/chat/completions";
+
+function getGithubModelsApiEndpoint() {
+  const configuredEndpoint = process.env.GITHUB_MODELS_API_ENDPOINT?.trim();
+
+  if (!configuredEndpoint) {
+    return DEFAULT_GITHUB_MODELS_API_ENDPOINT;
+  }
+
+  if (configuredEndpoint.endsWith("/chat/completions")) {
+    return configuredEndpoint;
+  }
+
+  return `${configuredEndpoint.replace(/\/+$/, "")}/chat/completions`;
+}
 // POST /api/chat/message
 router.post("/message", async (req, res) => {
   try {
@@ -49,8 +64,7 @@ router.post("/message", async (req, res) => {
 
     // Appeler GitHub Models API
     const response = await axios.post(
-      process.env.GITHUB_MODELS_API_ENDPOINT || 
-      "https://models.inference.ai.azure.com/chat/completions",
+      getGithubModelsApiEndpoint(),
       {
         model: "meta-llama-3.1-8b-instruct",
         messages: messages,

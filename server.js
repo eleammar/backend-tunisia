@@ -6,6 +6,7 @@ const chatRoutes = require("./routes/chat/tunex");
 const media = require('./routes/media');
 const citiesRouter = require('./routes/cities/cities');
 const foodRouter = require('./routes/foods/foods');
+const sketchfabRouter = require('./routes/sketchfab_models/sketchfab'); // ✅ AJOUTER
 
 const eventsRouter = require('./routes/events/events');
 
@@ -29,6 +30,10 @@ app.use("/api/chat", chatRoutes);
 app.use('/api/food', foodRouter);
 // Routes d'événements
 app.use('/api/events', eventsRouter);
+// Routes de modèles 3D Sketchfab
+app.use('/api/models', sketchfabRouter);
+
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -45,6 +50,7 @@ app.listen(port, () => console.log(`
     Cities API: http://localhost:${port}/api/cities
     Foods API: http://localhost:${port}/api/food
     Events API: http://localhost:${port}/api/events
+    Sketchfab Models API: http://localhost:${port}/api/models
     Model: Llama 3.1-8B   
     
     ` 

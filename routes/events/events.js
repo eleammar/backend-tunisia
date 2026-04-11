@@ -9,7 +9,7 @@ const pool = require('../../db/connection');
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, city_id, date, name, img, created_at, updated_at 
+      `SELECT id, city_id, date, name, img, category, created_at, updated_at 
        FROM events 
        ORDER BY date DESC`
     );
@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════��════
+// ═══════════════════════════════════════════════════════════════════
 // GET SINGLE EVENT BY ID
 // ════════════════════════════════════════════════════════════════
 router.get('/:id', async (req, res) => {
@@ -37,7 +37,7 @@ router.get('/:id', async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT id, city_id, date, name, img, created_at, updated_at 
+      `SELECT id, city_id, date, name, img, category, created_at, updated_at 
        FROM events 
        WHERE id = $1`,
       [eventId]
@@ -85,7 +85,7 @@ router.get('/city/:cityId', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, city_id, date, name, img, created_at, updated_at 
+      `SELECT id, city_id, date, name, img, category, created_at, updated_at 
        FROM events 
        WHERE city_id = $1 
        ORDER BY date ASC`,
@@ -108,11 +108,77 @@ router.get('/city/:cityId', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════
+// GET EVENTS BY CATEGORY
+// ════════════════════════════════════════════════════════════════
+router.get('/category/:category', async (req, res) => {
+  const category = req.params.category;
+
+  try {
+    const result = await pool.query(
+      `SELECT id, city_id, date, name, img, category, created_at, updated_at 
+       FROM events 
+       WHERE category = $1
+       ORDER BY date DESC`,
+      [category]
+    );
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length,
+    });
+  } catch (err) {
+    console.error('Error fetching events by category:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch events',
+      details: err.message,
+    });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// GET ALL EVENT CATEGORIES
+// ════════════════════════════════════════════════════════════════
+router.get('/list/categories', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT category 
+       FROM events 
+       WHERE category IS NOT NULL
+       ORDER BY category ASC`
+    );
+
+    const categories = [
+      "Festivals culturels",
+      "Festivals musicaux",
+      "Événements traditionnels et religieux",
+      "Événements gastronomiques",
+      "Événements sportifs",
+      "Événements touristiques et culturels"
+    ];
+
+    res.json({
+      success: true,
+      data: categories,
+      count: categories.length,
+    });
+  } catch (err) {
+    console.error('Error fetching categories:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch categories',
+      details: err.message,
+    });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
 // CREATE NEW EVENT (POST)
-// ════════════════════════════════════════════════════════════���═══
+// ════════════════════════════════════════════════════════════════
 router.post('/', async (req, res) => {
   try {
-    const { city_id, date, name, img } = req.body;
+    const { city_id, date, name, img, category } = req.body;
 
     // Validate required fields
     if (!city_id || !date || !name) {
@@ -136,10 +202,10 @@ router.post('/', async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO events (city_id, date, name, img, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, now(), now())
-       RETURNING id, city_id, date, name, img, created_at, updated_at`,
-      [city_id, date, name, img || null]
+      `INSERT INTO events (city_id, date, name, img, category, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, now(), now())
+       RETURNING id, city_id, date, name, img, category, created_at, updated_at`,
+      [city_id, date, name, img || null, category || 'Événements']
     );
 
     res.status(201).json({
@@ -164,7 +230,7 @@ router.put('/:id', async (req, res) => {
   const eventId = req.params.id;
 
   try {
-    const { city_id, date, name, img } = req.body;
+    const { city_id, date, name, img, category } = req.body;
 
     // Check if event exists
     const eventCheck = await pool.query(
@@ -200,10 +266,11 @@ router.put('/:id', async (req, res) => {
            date = COALESCE($2, date),
            name = COALESCE($3, name),
            img = COALESCE($4, img),
+           category = COALESCE($5, category),
            updated_at = now()
-       WHERE id = $5
-       RETURNING id, city_id, date, name, img, created_at, updated_at`,
-      [city_id || null, date || null, name || null, img || null, eventId]
+       WHERE id = $6
+       RETURNING id, city_id, date, name, img, category, created_at, updated_at`,
+      [city_id || null, date || null, name || null, img || null, category || null, eventId]
     );
 
     res.json({
@@ -221,7 +288,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// ════════════════════════════════════════════════════════════════
+// ═══��════════════════════════════════════════════════════════════
 // DELETE EVENT (DELETE)
 // ════════════════════════════════════════════════════════════════
 router.delete('/:id', async (req, res) => {
