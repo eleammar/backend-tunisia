@@ -1,11 +1,40 @@
 // backend/routes/cities.js - COMPLETE WITH CRUD
 const express = require('express');
 const router = express.Router();
-const pool = require('../../db/connection');
+const pool = require('../../src/db/connection');
 
-// ═══════════════════════════════════════════════════════════════════════════
+// Helper to normalize food rows returned from DB
+function normalizeFoodRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.cat || row.category || '',
+    description: row.desc || row.description || '',
+    imageUrl: row.img || row.image_url || row.imageUrl || '',
+    image_url: row.img || row.image_url || row.imageUrl || '',
+    rating: row.rating != null ? Number(row.rating) : 0,
+    recipe: row.recipe || null,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+    displayOrder: row.display_order != null ? Number(row.display_order) : null,
+  };
+}
+
+// Utility to extract all_food_id from incoming payload item (accept number or object)
+function extractFoodId(item) {
+  if (item == null) return null;
+  if (typeof item === 'number') return item;
+  if (typeof item === 'string' && /^\d+$/.test(item)) return parseInt(item, 10);
+  if (typeof item === 'object') {
+    if (item.id != null && typeof item.id === 'number') return item.id;
+    if (item.all_food_id != null && typeof item.all_food_id === 'number') return item.all_food_id;
+    if (item.id != null && typeof item.id === 'string' && /^\d+$/.test(item.id)) return parseInt(item.id, 10);
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // GET ALL CITIES (WITH HERO INFO FOR CARDS)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
@@ -22,7 +51,6 @@ router.get('/', async (req, res) => {
       ORDER BY c.name ASC`
     );
 
-    // ✅ Map to include hero object
     const cities = result.rows.map(row => ({
       id: row.id,
       name: row.name,
@@ -49,9 +77,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GET SINGLE CITY WITH ALL RELATED DATA
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 router.get('/:id', async (req, res) => {
   const cityId = req.params.id;
 
@@ -115,12 +143,26 @@ router.get('/:id', async (req, res) => {
       [cityId]
     );
 
-    // 9. Get food items
+    // 9. Get food items using all_foods + relation city_all_foods
     const foodResult = await pool.query(
-      `SELECT id, img, category as cat, name, description as desc 
-       FROM food_items WHERE city_id = $1 ORDER BY display_order ASC`,
+      `SELECT 
+         f.id, 
+         f.image_url AS image_url,
+         f.category AS cat, 
+         f.name, 
+         f.description AS desc, 
+         f.rating,
+         f.recipe,
+         f.created_at,
+         caf.display_order
+       FROM all_foods f
+       JOIN city_all_foods caf ON f.id = caf.all_food_id
+       WHERE caf.city_id = $1
+       ORDER BY caf.display_order ASC`,
       [cityId]
     );
+
+    const foodItems = (foodResult.rows || []).map(normalizeFoodRow);
 
     // 10. Get hotels
     const hotelsResult = await pool.query(
@@ -160,9 +202,7 @@ router.get('/:id', async (req, res) => {
       [cityId]
     );
 
-    // ─────────────────────────────────────────────────────────────────────────
     // BUILD RESPONSE OBJECT
-    // ─────────────────────────────────────────────────────────────────────────
     const responseCity = {
       id: city.id,
       name: city.name,
@@ -206,8 +246,8 @@ router.get('/:id', async (req, res) => {
       // Experiences/Activities
       experiences: experiencesResult.rows || [],
 
-      // Food
-      food: foodResult.rows || [],
+      // Food (from all_foods via relation)
+      food: foodItems,
 
       // Hotels
       hotels: hotelsResult.rows || [],
@@ -248,9 +288,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // CREATE NEW CITY (POST)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════��═══════════════════════════════════==
 router.post('/', async (req, res) => {
   const client = await pool.connect();
 
@@ -288,7 +328,7 @@ router.post('/', async (req, res) => {
       `INSERT INTO cities (name, region, map_src, map_center_lat, map_center_lng, map_zoom)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [name, region, mapSrc || '', mapCenter[0], mapCenter[1], mapZoom || 13]
+      [name, region, mapSrc || '', (mapCenter && mapCenter[0]) || null, (mapCenter && mapCenter[1]) || null, mapZoom || 13]
     );
 
     const cityId = cityResult.rows[0].id;
@@ -367,14 +407,46 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // 7. Insert food items
+    // 7. Insert food relations into city_all_foods
+    // Accept: food: [ { id: 1 }, { id: 2 }, { name: 'Couscous', ... } ] OR food: [1,2]
     if (food && food.length > 0) {
       for (let i = 0; i < food.length; i++) {
-        const item = food[i];
+        const incoming = food[i];
+        let allFoodId = extractFoodId(incoming);
+        if (allFoodId == null && incoming && typeof incoming === 'object' && incoming.name && incoming.name.trim()) {
+          // Try to find existing food by name+city
+          const foodName = incoming.name.trim();
+          const foodCategory = incoming.category || incoming.cat || '';
+          const foodDescription = incoming.description || incoming.desc || '';
+          const foodImageUrl = incoming.imageUrl || incoming.image_url || '';
+          const foodCity = incoming.city || name;
+          const foodRating = incoming.rating != null ? incoming.rating : 0;
+          const foodRecipe = incoming.recipe ? JSON.stringify(incoming.recipe) : null;
+          // Try to find existing
+          const existing = await client.query(
+            'SELECT id FROM all_foods WHERE LOWER(name) = LOWER($1) AND city = $2 LIMIT 1',
+            [foodName, foodCity]
+          );
+          if (existing.rows.length > 0) {
+            allFoodId = existing.rows[0].id;
+          } else {
+            // Insert new food
+            const insertRes = await client.query(
+              `INSERT INTO all_foods (name, category, description, image_url, city, rating, recipe)
+               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+              [foodName, foodCategory, foodDescription, foodImageUrl, foodCity, foodRating, foodRecipe]
+            );
+            allFoodId = insertRes.rows[0].id;
+          }
+        }
+        if (allFoodId == null) {
+          console.warn(`Skipping invalid food item at index ${i}:`, incoming);
+          continue;
+        }
         await client.query(
-          `INSERT INTO food_items (city_id, img, category, name, description, display_order)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [cityId, item.img || '', item.cat || '', item.name, item.desc || '', i]
+          `INSERT INTO city_all_foods (city_id, all_food_id, display_order)
+           VALUES ($1, $2, $3)`,
+          [cityId, allFoodId, i]
         );
       }
     }
@@ -475,9 +547,9 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // UPDATE CITY (PUT)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════==
 router.put('/:id', async (req, res) => {
   const cityId = req.params.id;
   const client = await pool.connect();
@@ -517,7 +589,7 @@ router.put('/:id', async (req, res) => {
       `UPDATE cities SET name = $1, region = $2, map_src = $3, map_center_lat = $4, 
                          map_center_lng = $5, map_zoom = $6
        WHERE id = $7`,
-      [name, region, mapSrc || '', mapCenter[0], mapCenter[1], mapZoom || 13, cityId]
+      [name, region, mapSrc || '', (mapCenter && mapCenter[0]) || null, (mapCenter && mapCenter[1]) || null, mapZoom || 13, cityId]
     );
 
     // 2. Delete and recreate hero section
@@ -601,15 +673,46 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // 7. Delete and recreate food items
-    await client.query('DELETE FROM food_items WHERE city_id = $1', [cityId]);
+    // 7. Delete and recreate food relations (city_all_foods)
+    await client.query('DELETE FROM city_all_foods WHERE city_id = $1', [cityId]);
     if (food && food.length > 0) {
       for (let i = 0; i < food.length; i++) {
-        const item = food[i];
+        const incoming = food[i];
+        let allFoodId = extractFoodId(incoming);
+        if (allFoodId == null && incoming && typeof incoming === 'object' && incoming.name && incoming.name.trim()) {
+          // Try to find existing food by name+city
+          const foodName = incoming.name.trim();
+          const foodCategory = incoming.category || incoming.cat || '';
+          const foodDescription = incoming.description || incoming.desc || '';
+          const foodImageUrl = incoming.imageUrl || incoming.image_url || '';
+          const foodCity = incoming.city || name;
+          const foodRating = incoming.rating != null ? incoming.rating : 0;
+          const foodRecipe = incoming.recipe ? JSON.stringify(incoming.recipe) : null;
+          // Try to find existing
+          const existing = await client.query(
+            'SELECT id FROM all_foods WHERE LOWER(name) = LOWER($1) AND city = $2 LIMIT 1',
+            [foodName, foodCity]
+          );
+          if (existing.rows.length > 0) {
+            allFoodId = existing.rows[0].id;
+          } else {
+            // Insert new food
+            const insertRes = await client.query(
+              `INSERT INTO all_foods (name, category, description, image_url, city, rating, recipe)
+               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+              [foodName, foodCategory, foodDescription, foodImageUrl, foodCity, foodRating, foodRecipe]
+            );
+            allFoodId = insertRes.rows[0].id;
+          }
+        }
+        if (allFoodId == null) {
+          console.warn(`Skipping invalid food item at index ${i}:`, incoming);
+          continue;
+        }
         await client.query(
-          `INSERT INTO food_items (city_id, img, category, name, description, display_order)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [cityId, item.img || '', item.cat || '', item.name, item.desc || '', i]
+          `INSERT INTO city_all_foods (city_id, all_food_id, display_order)
+           VALUES ($1, $2, $3)`,
+          [cityId, allFoodId, i]
         );
       }
     }
@@ -721,9 +824,9 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // DELETE CITY (DELETE)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════==
 router.delete('/:id', async (req, res) => {
   const cityId = req.params.id;
   const client = await pool.connect();
@@ -763,7 +866,10 @@ router.delete('/:id', async (req, res) => {
     await client.query('DELETE FROM culture_items WHERE city_id = $1', [cityId]);
     await client.query('DELETE FROM events WHERE city_id = $1', [cityId]);
     await client.query('DELETE FROM experiences WHERE city_id = $1', [cityId]);
-    await client.query('DELETE FROM food_items WHERE city_id = $1', [cityId]);
+
+    // Delete city-food relations
+    await client.query('DELETE FROM city_all_foods WHERE city_id = $1', [cityId]);
+
     await client.query('DELETE FROM hotels WHERE city_id = $1', [cityId]);
     await client.query('DELETE FROM delegations WHERE city_id = $1', [cityId]);
 
@@ -789,9 +895,9 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GET CITY BY NAME (Alternative)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════==
 router.get('/by-name/:name', async (req, res) => {
   const cityName = req.params.name;
 
@@ -820,14 +926,9 @@ router.get('/by-name/:name', async (req, res) => {
   }
 });
 
-
-
-
-
-
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GET ALL CULTURE ITEMS (GLOBAL - NOT FILTERED BY CITY)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════==
 router.get('/data/culture', async (req, res) => {
   try {
     const result = await pool.query(
@@ -848,9 +949,9 @@ router.get('/data/culture', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GET ALL EVENTS (GLOBAL - NOT FILTERED BY CITY)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════==
 router.get('/data/events', async (req, res) => {
   try {
     const result = await pool.query(
@@ -871,9 +972,9 @@ router.get('/data/events', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GET ALL EXPERIENCES/ACTIVITIES (GLOBAL - NOT FILTERED BY CITY)
-// ══════════════════════════════��════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════==
 router.get('/data/activities', async (req, res) => {
   try {
     const result = await pool.query(
@@ -894,18 +995,21 @@ router.get('/data/activities', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GET ALL FOOD ITEMS (GLOBAL - NOT FILTERED BY CITY)
-// ═══════════════════════════════════════════════════════════════════════════
+// Now reads from all_foods (global table)
+// ═════════════════════════════════════════════════════════════════==
 router.get('/data/food', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, img, category as cat, name, description as desc FROM food_items ORDER BY name ASC'
+      `SELECT id, image_url AS image_url, category as cat, name, description as desc, rating, recipe, created_at
+       FROM all_foods ORDER BY name ASC`
     );
+    const normalized = (result.rows || []).map(normalizeFoodRow);
     res.json({
       success: true,
-      data: result.rows,
-      count: result.rows.length,
+      data: normalized,
+      count: normalized.length,
     });
   } catch (err) {
     console.error('Error fetching food items:', err);
@@ -917,9 +1021,9 @@ router.get('/data/food', async (req, res) => {
   }
 });
 
-// ═════════════════════��═════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GET ALL HOTELS (GLOBAL - NOT FILTERED BY CITY)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════==
 router.get('/data/hotels', async (req, res) => {
   try {
     const result = await pool.query(
@@ -940,9 +1044,9 @@ router.get('/data/hotels', async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GET ALL DELEGATIONS (GLOBAL - NOT FILTERED BY CITY)
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════==
 router.get('/data/delegations', async (req, res) => {
   try {
     const result = await pool.query(

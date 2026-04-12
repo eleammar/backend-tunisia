@@ -1,21 +1,20 @@
-// src/app.js
-const express = require('express');
-const cors = require('cors');
-const routes = require('./routes');
+import express from 'express';
+import dotenv from 'dotenv';
+import cultureRoutes from './routes/cultureRoutes';
+
+dotenv.config();
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json());
+app.use('/api/culture-items', cultureRoutes);
 
-// Routes
-app.use('/api', routes);
+// Basic health route
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-// Route de santé
-app.get('/', (req, res) => {
-  res.json({ message: 'Backend EduLearn fonctionne ✅' });
+// Error fallback
+app.use((err, req, res, next) => {
+  console.error('Unhandled error', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
-
-// ⚠️ IMPORTANT : Exporter l'application Express
-module.exports = app;  // ← DOIT être présent
+export default app;

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../../db/connection');
+const pool = require('../../src/db/connection');
 
 // GET all foods with pagination
 // Change the GET response:

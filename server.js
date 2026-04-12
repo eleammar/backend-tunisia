@@ -7,7 +7,6 @@ const media = require('./routes/media');
 const citiesRouter = require('./routes/cities/cities');
 const foodRouter = require('./routes/foods/foods');
 const sketchfabRouter = require('./routes/sketchfab_models/sketchfab'); // ✅ AJOUTER
-
 const eventsRouter = require('./routes/events/events');
 
 const app = express();

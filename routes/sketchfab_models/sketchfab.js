@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
-const pool = require('../../db/connection');
+const pool = require('../../src/db/connection');
 const axios = require('axios');
 
 const DEFAULT_GITHUB_MODELS_API_ENDPOINT = 'https://models.inference.ai.azure.com/chat/completions';

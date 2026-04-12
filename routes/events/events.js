@@ -1,7 +1,7 @@
 // backend/routes/events/events.js - COMPLETE WITH CRUD
 const express = require('express');
 const router = express.Router();
-const pool = require('../../db/connection');
+const pool = require('../../src/db/connection');
 
 // ════════════════════════════════════════════════════════════════
 // GET ALL EVENTS (GLOBAL)
