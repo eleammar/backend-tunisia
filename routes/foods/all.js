@@ -1,7 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../src/db/connection');
+const multer = require('multer');
+const path = require('path');
 
+// Dossier où stocker les images uploadées
+const upload = multer({
+  dest: path.join(__dirname, '../../public/uploads/'),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 Mo max
+});
 // GET all foods with pagination
 // Change the GET response:
 
@@ -73,10 +80,11 @@ router.get('/:id', async (req, res) => {
 });
 
 // CREATE food
-router.post('/', async (req, res) => {
+router.post('/', upload.single('image'), async (req, res) => {
   try {
-    const { name, category, description, image_url, city, rating, recipe } = req.body;
-    
+    const { name, category, description, city, rating, recipe } = req.body;
+    const image_url = req.file ? `/uploads/${req.file.filename}` : null;
+
     if (!name || !category) {
       return res.status(400).json({ error: 'Name and category are required' });
     }
@@ -94,11 +102,12 @@ router.post('/', async (req, res) => {
 });
 
 // UPDATE food
-router.put('/:id', async (req, res) => {
+router.put('/:id', upload.single('image'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, category, description, image_url, city, rating, recipe } = req.body;
-    
+    const { name, category, description, city, rating, recipe } = req.body;
+    const image_url = req.file ? `/uploads/${req.file.filename}` : null;
+
     const result = await pool.query(
       `UPDATE all_foods 
        SET name = COALESCE($1, name), 

@@ -8,7 +8,7 @@ const citiesRouter = require('./routes/cities/cities');
 const foodRouter = require('./routes/foods/foods');
 const sketchfabRouter = require('./routes/sketchfab_models/sketchfab'); // ✅ AJOUTER
 const eventsRouter = require('./routes/events/events');
-
+const path = require('path');
 const app = express();
 app.use(express.json());
 
@@ -32,7 +32,7 @@ app.use('/api/events', eventsRouter);
 // Routes de modèles 3D Sketchfab
 app.use('/api/models', sketchfabRouter);
 
-
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

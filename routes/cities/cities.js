@@ -1,7 +1,19 @@
 // backend/routes/cities.js - COMPLETE WITH CRUD
 const express = require('express');
 const router = express.Router();
+
 const pool = require('../../src/db/connection');
+const multer = require('multer');
+const path = require('path');
+
+// Dossier où stocker les images uploadées
+const upload = multer({
+  dest: path.join(__dirname, '../../public/uploads/'),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 Mo max
+});
+
+
+
 
 // Helper to normalize food rows returned from DB
 function normalizeFoodRow(row) {
@@ -214,14 +226,14 @@ router.get('/:id', async (req, res) => {
           : [36.819, 10.1658],
       mapZoom: city.map_zoom || 13,
 
-      // Hero section
+      // Hero section (always present)
       hero: {
         bg: heroResult.rows[0]?.bg || '',
         desc: heroResult.rows[0]?.description || '',
         cards: heroCardsResult.rows || [],
       },
 
-      // About section
+      // About section (always present)
       about:
         aboutResult.rows.length > 0
           ? {
@@ -231,34 +243,34 @@ router.get('/:id', async (req, res) => {
               img: aboutResult.rows[0].img,
               stats: statsResult.rows || [],
             }
-          : undefined,
+          : { label: '', headline: '', body: '', img: '', stats: [] },
 
-      // Culture section
+      // Culture section (always present)
       culture: {
         title: `La culture de ${city.name}`,
         country: `Tunisie · ${city.region}`,
         items: cultureItemsResult.rows || [],
       },
 
-      // Events
+      // Events (always array)
       events: eventsResult.rows || [],
 
-      // Experiences/Activities
+      // Experiences/Activities (always array)
       experiences: experiencesResult.rows || [],
 
-      // Food (from all_foods via relation)
-      food: foodItems,
+      // Food (always array)
+      food: foodItems || [],
 
-      // Hotels
+      // Hotels (always array)
       hotels: hotelsResult.rows || [],
 
-      // Delegations
+      // Delegations (always array)
       delegations: delegationsResult.rows || [],
 
-      // CTA
+      // CTA (always object)
       cta: ctaResult.rows[0] || { label: '', title: '', description: '', image: '' },
 
-      // Banner
+      // Banner (always object)
       banner:
         bannerResult.rows.length > 0
           ? {
@@ -271,7 +283,7 @@ router.get('/:id', async (req, res) => {
               videoPoster: bannerResult.rows[0].video_poster,
               images: bannerImages,
             }
-          : undefined,
+          : { type: '', title: '', subtitle: '', ctaLabel: '', ctaUrl: '', videoUrl: '', videoPoster: '', images: [] },
     };
 
     res.json({
@@ -291,7 +303,9 @@ router.get('/:id', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 // CREATE NEW CITY (POST)
 // ═════════════════════════════��═══════════════════════════════════==
-router.post('/', async (req, res) => {
+
+// Use upload.single('image') to handle food image upload as part of city creation
+router.post('/', upload.single('image'), async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -418,7 +432,11 @@ router.post('/', async (req, res) => {
           const foodName = incoming.name.trim();
           const foodCategory = incoming.category || incoming.cat || '';
           const foodDescription = incoming.description || incoming.desc || '';
-          const foodImageUrl = incoming.imageUrl || incoming.image_url || '';
+          // If this food is the one being uploaded, use the uploaded image
+          let foodImageUrl = incoming.imageUrl || incoming.image_url || '';
+          if (req.file && i === 0) {
+            foodImageUrl = `/uploads/${req.file.filename}`;
+          }
           const foodCity = incoming.city || name;
           const foodRating = incoming.rating != null ? incoming.rating : 0;
           const foodRecipe = incoming.recipe ? JSON.stringify(incoming.recipe) : null;
