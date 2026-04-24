@@ -8,6 +8,7 @@ const citiesRouter = require('./routes/cities/cities');
 const foodRouter = require('./routes/foods/foods');
 const sketchfabRouter = require('./routes/sketchfab_models/sketchfab'); // ✅ AJOUTER
 const eventsRouter = require('./routes/events/events');
+
 const path = require('path');
 const app = express();
 app.use(express.json());
@@ -31,8 +32,18 @@ app.use('/api/food', foodRouter);
 app.use('/api/events', eventsRouter);
 // Routes de modèles 3D Sketchfab
 app.use('/api/models', sketchfabRouter);
-
+// Routes d'expériences
+app.use('/api/experiences', require('./routes/experiences/experiences'));
+// Routes de culture
+app.use('/api/culture', require('./routes/culture/culture'));
+// Routes de délégations
+app.use('/api/delegations', require('./routes/delegations/delegations'));
+// Routes de téléchargement
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+// Routes de guide touristique
+app.use('/api/places', require('./routes/guide/place'));
+
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -50,6 +61,11 @@ app.listen(port, () => console.log(`
     Foods API: http://localhost:${port}/api/food
     Events API: http://localhost:${port}/api/events
     Sketchfab Models API: http://localhost:${port}/api/models
+    Experiences API: http://localhost:${port}/api/experiences
+    Culture API: http://localhost:${port}/api/culture
+    Delegations API: http://localhost:${port}/api/delegations
+    guide touristique API: http://localhost:${port}/api/places
+    Uploads API: http://localhost:${port}/uploads
     Model: Llama 3.1-8B   
     
     ` 

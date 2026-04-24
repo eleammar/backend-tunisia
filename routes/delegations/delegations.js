@@ -8,9 +8,9 @@ router.get('/', async (req, res) => {
     const { limit = 20, offset = 0 } = req.query;
 
     const result = await pool.query(
-      `SELECT id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, display_order, created_at, updated_at
+      `SELECT id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, created_at, updated_at
        FROM delegations
-       ORDER BY COALESCE(display_order, 9999) ASC, created_at DESC
+       ORDER BY id ASC
        LIMIT $1 OFFSET $2`,
       [parseInt(limit, 10), parseInt(offset, 10)]
     );
@@ -35,7 +35,7 @@ router.get('/:id', async (req, res) => {
   const id = req.params.id;
   try {
     const result = await pool.query(
-      `SELECT id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, display_order, created_at, updated_at
+      `SELECT id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, created_at, updated_at
        FROM delegations WHERE id = $1`,
       [id]
     );
@@ -62,9 +62,9 @@ router.get('/city/:cityId', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, display_order, created_at, updated_at
+      `SELECT id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, created_at, updated_at
        FROM delegations WHERE city_id = $1
-       ORDER BY COALESCE(display_order, 9999) ASC, created_at DESC`,
+       ORDER BY id ASC`,
       [cityId]
     );
 
@@ -80,7 +80,7 @@ router.post('/', async (req, res) => {
   try {
     const {
       city_id, name, population, area, description, img,
-      founded, notable, type, lat, lng, display_order
+      founded, notable, type, lat, lng
     } = req.body;
 
     if (!city_id || !name) {
@@ -95,9 +95,9 @@ router.post('/', async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO delegations
-       (city_id, name, population, area, description, img, founded, notable, type, lat, lng, display_order, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now(), now())
-       RETURNING id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, display_order, created_at, updated_at`,
+       (city_id, name, population, area, description, img, founded, notable, type, lat, lng, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now(), now())
+       RETURNING id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, created_at, updated_at`,
       [
         city_id,
         name,
@@ -109,8 +109,7 @@ router.post('/', async (req, res) => {
         notable || null,
         type || null,
         lat !== undefined && lat !== null ? parseFloat(lat) : null,
-        lng !== undefined && lng !== null ? parseFloat(lng) : null,
-        display_order !== undefined && display_order !== null ? parseInt(display_order, 10) : null,
+        lng !== undefined && lng !== null ? parseFloat(lng) : null
       ]
     );
 
@@ -131,7 +130,7 @@ router.put('/:id', async (req, res) => {
   try {
     const {
       city_id, name, population, area, description, img,
-      founded, notable, type, lat, lng, display_order
+      founded, notable, type, lat, lng
     } = req.body;
 
     // Check if exists
@@ -160,10 +159,9 @@ router.put('/:id', async (req, res) => {
          type = COALESCE($9, type),
          lat = COALESCE($10, lat),
          lng = COALESCE($11, lng),
-         display_order = COALESCE($12, display_order),
          updated_at = now()
-       WHERE id = $13
-       RETURNING id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, display_order, created_at, updated_at`,
+       WHERE id = $12
+       RETURNING id, city_id, name, population, area, description, img, founded, notable, type, lat, lng, created_at, updated_at`,
       [
         city_id || null,
         name || null,
@@ -176,7 +174,6 @@ router.put('/:id', async (req, res) => {
         type || null,
         lat !== undefined && lat !== null ? parseFloat(lat) : null,
         lng !== undefined && lng !== null ? parseFloat(lng) : null,
-        display_order !== undefined && display_order !== null ? parseInt(display_order, 10) : null,
         id,
       ]
     );

@@ -1,6 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../src/db/connection');
+const multer = require('multer');
+const path = require('path');
+
+// Multer config for region images
+const upload = multer({
+  dest: path.join(__dirname, '../../public/uploads/'),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+});
 // GET all regions - ORDERED by ID
 router.get('/', async (req, res) => {
   try {
@@ -49,20 +57,32 @@ router.get('/gov/:gov_id', async (req, res) => {
   }
 });
 
-// CREATE region
-router.post('/', async (req, res) => {
+// CREATE region with image upload (single or multiple)
+router.post('/', upload.array('images', 10), async (req, res) => {
   try {
-    const { gov_id, name, specialty, description, images } = req.body;
-    
+    const { gov_id, name, specialty, description } = req.body;
+    // Handle uploaded images
+    let images = [];
+    if (req.files && req.files.length > 0) {
+      images = req.files.map(file => `/uploads/${file.filename}`);
+    } else if (req.body.images) {
+      // Accept images as JSON array or string
+      try {
+        images = typeof req.body.images === 'string' ? JSON.parse(req.body.images) : req.body.images;
+      } catch {
+        images = [];
+      }
+    }
+
     if (!gov_id || !name) {
       return res.status(400).json({ error: 'gov_id and name are required' });
     }
-    
+
     const result = await pool.query(
       'INSERT INTO food_regions (gov_id, name, specialty, description, images) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [gov_id, name, specialty, description, images || []]
+      [gov_id, name, specialty, description, images]
     );
-    
+
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating region:', error);
@@ -70,12 +90,23 @@ router.post('/', async (req, res) => {
   }
 });
 
-// UPDATE region
-router.put('/:id', async (req, res) => {
+// UPDATE region with image upload (single or multiple)
+router.put('/:id', upload.array('images', 10), async (req, res) => {
   try {
     const { id } = req.params;
-    const { gov_id, name, specialty, description, images } = req.body;
-    
+    const { gov_id, name, specialty, description } = req.body;
+    // Handle uploaded images
+    let images = [];
+    if (req.files && req.files.length > 0) {
+      images = req.files.map(file => `/uploads/${file.filename}`);
+    } else if (req.body.images) {
+      try {
+        images = typeof req.body.images === 'string' ? JSON.parse(req.body.images) : req.body.images;
+      } catch {
+        images = [];
+      }
+    }
+
     const result = await pool.query(
       `UPDATE food_regions 
        SET gov_id = COALESCE($1, gov_id), 
@@ -87,11 +118,11 @@ router.put('/:id', async (req, res) => {
        WHERE id = $6 RETURNING *`,
       [gov_id, name, specialty, description, images, id]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Region not found' });
     }
-    
+
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating region:', error);

@@ -81,26 +81,61 @@ router.get('/:id', async (req, res) => {
 
 // CREATE food
 router.post('/', upload.single('image'), async (req, res) => {
+  const client = await pool.connect();
+
   try {
-    const { name, category, description, city, rating, recipe } = req.body;
+    const { name, category, description, city, rating, recipe, city_id } = req.body;
     const image_url = req.file ? `/uploads/${req.file.filename}` : null;
 
     if (!name || !category) {
       return res.status(400).json({ error: 'Name and category are required' });
     }
-    
-    const result = await pool.query(
-      'INSERT INTO all_foods (name, category, description, image_url, city, rating, recipe) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [name, category, description, image_url, city, rating || 0, JSON.stringify(recipe)]
+
+    await client.query('BEGIN');
+
+    // 1️⃣ Insert food
+    const foodResult = await client.query(
+      `INSERT INTO all_foods 
+      (name, category, description, image_url, city, rating, recipe)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING *`,
+      [
+        name,
+        category,
+        description,
+        image_url,
+        city,
+        rating || 0,
+        JSON.stringify(recipe)
+      ]
     );
-    
-    res.status(201).json(result.rows[0]);
+
+    const food = foodResult.rows[0];
+
+    // 2️⃣ Insert relation with city
+    if (city_id) {
+      await client.query(
+        `INSERT INTO city_all_foods (city_id, all_food_id)
+         VALUES ($1,$2)`,
+        [city_id, food.id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    res.status(201).json(food);
+
   } catch (error) {
+
+    await client.query('ROLLBACK');
+
     console.error('Error creating food:', error);
     res.status(500).json({ error: 'Failed to create food' });
+
+  } finally {
+    client.release();
   }
 });
-
 // UPDATE food
 router.put('/:id', upload.single('image'), async (req, res) => {
   try {
@@ -151,4 +186,25 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+
+router.get('/city/:cityId', async (req, res) => {
+  try {
+    const { cityId } = req.params;
+
+    const result = await pool.query(
+      `SELECT f.*
+       FROM city_all_foods caf
+       JOIN all_foods f ON f.id = caf.all_food_id
+       WHERE caf.city_id = $1
+       ORDER BY caf.display_order`,
+      [cityId]
+    );
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch foods for city' });
+  }
+});
 module.exports = router;

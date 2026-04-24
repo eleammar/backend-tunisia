@@ -3,11 +3,11 @@ const router = express.Router();
 const pool = require('../../src/db/connection');
 
 const ALLOWED_TYPES = [
-  'Culture & History',
-  'Nature',
-  'Food & Beverages',
-  'Adventure',
-  'Leisure'
+    'À la une',
+    'Culture & Histoire',
+    'Nature & Plein air',
+    'Gastronomie',
+    'Aventure'
 ];
 
 // GET all experiences (pagination optional)
@@ -16,9 +16,9 @@ router.get('/', async (req, res) => {
     const { limit = 20, offset = 0 } = req.query;
 
     const result = await pool.query(
-      `SELECT id, city_id, name, type, rating, img, display_order, created_at, updated_at
+      `SELECT id, city_id, name, type, rating, img, created_at, updated_at
        FROM experiences
-       ORDER BY COALESCE(display_order, 9999) ASC, created_at DESC
+       ORDER BY id ASC
        LIMIT $1 OFFSET $2`,
       [parseInt(limit, 10), parseInt(offset, 10)]
     );
@@ -43,7 +43,7 @@ router.get('/:id', async (req, res) => {
   const id = req.params.id;
   try {
     const result = await pool.query(
-      `SELECT id, city_id, name, type, rating, img, display_order, created_at, updated_at
+      `SELECT id, city_id, name, type, rating, img, created_at, updated_at
        FROM experiences WHERE id = $1`,
       [id]
     );
@@ -70,9 +70,9 @@ router.get('/city/:cityId', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, city_id, name, type, rating, img, display_order, created_at, updated_at
+      `SELECT id, city_id, name, type, rating, img, created_at, updated_at
        FROM experiences WHERE city_id = $1
-       ORDER BY COALESCE(display_order, 9999) ASC, created_at DESC`,
+       ORDER BY id ASC`,
       [cityId]
     );
 
@@ -86,7 +86,7 @@ router.get('/city/:cityId', async (req, res) => {
 // CREATE experience
 router.post('/', async (req, res) => {
   try {
-    const { city_id, name, type, rating, img, display_order } = req.body;
+    const { city_id, name, type, rating, img } = req.body;
 
     if (!city_id || !name || !type) {
       return res.status(400).json({ success: false, error: 'city_id, name and type are required' });
@@ -103,16 +103,15 @@ router.post('/', async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO experiences (city_id, name, type, rating, img, display_order, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, now(), now())
-       RETURNING id, city_id, name, type, rating, img, display_order, created_at, updated_at`,
+      `INSERT INTO experiences (city_id, name, type, rating, img, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, now(), now())
+       RETURNING id, city_id, name, type, rating, img, created_at, updated_at`,
       [
         city_id,
         name,
         type,
         rating !== undefined && rating !== null ? parseFloat(rating) : null,
-        img || null,
-        display_order !== undefined && display_order !== null ? parseInt(display_order, 10) : null,
+        img || null
       ]
     );
 
@@ -131,7 +130,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const id = req.params.id;
   try {
-    const { city_id, name, type, rating, img, display_order } = req.body;
+    const { city_id, name, type, rating, img } = req.body;
 
     // Check if exists
     const itemCheck = await pool.query('SELECT id FROM experiences WHERE id = $1', [id]);
@@ -157,17 +156,15 @@ router.put('/:id', async (req, res) => {
            type = COALESCE($3, type),
            rating = COALESCE($4, rating),
            img = COALESCE($5, img),
-           display_order = COALESCE($6, display_order),
            updated_at = now()
-       WHERE id = $7
-       RETURNING id, city_id, name, type, rating, img, display_order, created_at, updated_at`,
+       WHERE id = $6
+       RETURNING id, city_id, name, type, rating, img, created_at, updated_at`,
       [
         city_id || null,
         name || null,
         type || null,
         rating !== undefined && rating !== null ? parseFloat(rating) : null,
         img || null,
-        display_order !== undefined && display_order !== null ? parseInt(display_order, 10) : null,
         id,
       ]
     );
