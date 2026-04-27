@@ -6,9 +6,9 @@ const chatRoutes = require("./routes/chat/tunex");
 const media = require('./routes/media');
 const citiesRouter = require('./routes/cities/cities');
 const foodRouter = require('./routes/foods/foods');
-const sketchfabRouter = require('./routes/sketchfab_models/sketchfab'); // ✅ AJOUTER
+const sketchfabRouter = require('./routes/sketchfab_models/sketchfab');
 const eventsRouter = require('./routes/events/events');
-
+const guideRoutes = require('./routes/guide/guide');
 const path = require('path');
 const app = express();
 app.use(express.json());
@@ -38,12 +38,16 @@ app.use('/api/experiences', require('./routes/experiences/experiences'));
 app.use('/api/culture', require('./routes/culture/culture'));
 // Routes de délégations
 app.use('/api/delegations', require('./routes/delegations/delegations'));
+//route hotels
+app.use('/api/hotels', require('./routes/hotels/hotels'));
 // Routes de téléchargement
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 // Routes de guide touristique
-app.use('/api/places', require('./routes/guide/place'));
-
-
+app.use('/api/guide', guideRoutes);
+// Routes d'authentification
+app.use('/api/auth', require('./routes/auth/auth'));
+// Routes d'onboarding
+app.use('/api/onboarding', require('./routes/onboarding/onboardingRoutes.js'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -64,7 +68,11 @@ app.listen(port, () => console.log(`
     Experiences API: http://localhost:${port}/api/experiences
     Culture API: http://localhost:${port}/api/culture
     Delegations API: http://localhost:${port}/api/delegations
-    guide touristique API: http://localhost:${port}/api/places
+    guide touristique API: http://localhost:${port}/api/guide
+    Auth API: http://localhost:${port}/api/auth
+    Onboarding API: http://localhost:${port}/api/onboarding
+   
+    hotels API: http://localhost:${port}/api/hotels
     Uploads API: http://localhost:${port}/uploads
     Model: Llama 3.1-8B   
     

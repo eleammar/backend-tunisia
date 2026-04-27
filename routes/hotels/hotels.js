@@ -5,7 +5,7 @@ const pool = require('../../src/db/connection');
 // GET all hotels (supports optional city filter, pagination)
 router.get('/', async (req, res) => {
   try {
-    const { city = '', limit = 10, offset = 0 } = req.query;
+    const { city = '', limit, offset = 0 } = req.query;
 
     let query = 'SELECT id, city_id, name, distance, img, rating, price, display_order, created_at, updated_at FROM hotels WHERE 1=1';
     const params = [];
@@ -16,8 +16,20 @@ router.get('/', async (req, res) => {
     }
 
     query += ' ORDER BY COALESCE(display_order, 9999) ASC, rating DESC NULLS LAST';
-    query += ' LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
-    params.push(parseInt(limit, 10), parseInt(offset, 10));
+
+    // Si limit est fourni et différent de 0 ou 'all', appliquer la pagination
+    let useLimit = true;
+    let parsedLimit = 10;
+    if (limit === undefined || limit === null || limit === '' || limit === 'all' || parseInt(limit, 10) === 0) {
+      useLimit = false;
+    } else {
+      parsedLimit = parseInt(limit, 10);
+    }
+
+    if (useLimit) {
+      query += ' LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+      params.push(parsedLimit, parseInt(offset, 10));
+    }
 
     const result = await pool.query(query, params);
 
@@ -28,8 +40,8 @@ router.get('/', async (req, res) => {
       success: true,
       data: result.rows,
       total: parseInt(countResult.rows[0].count, 10),
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10)
+      limit: useLimit ? parsedLimit : null,
+      offset: useLimit ? parseInt(offset, 10) : null
     });
   } catch (error) {
     console.error('Error fetching hotels:', error);

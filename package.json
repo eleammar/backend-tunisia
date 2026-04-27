@@ -9,10 +9,14 @@
   },
   "dependencies": {
     "aws-sdk": "^2.1360.0",
-    "axios": "^1.14.0",
+    "axios": "^1.15.2",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
+    "google-auth-library": "^10.6.2",
+    "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "pg": "^8.10.0"
   },
