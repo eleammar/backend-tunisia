@@ -3,7 +3,8 @@
 const express = require("express");
 const router = express.Router();
 const axios = require("axios");
-const tunisiaSystemPrompt = require("../../util/tunisiaPrompt");
+const { verifyToken } = require("../auth/auth");
+const tunisiaSystemPrompt = require("../../util/tunisiaPrompt_premium");
 
 const DEFAULT_GITHUB_MODELS_API_ENDPOINT = "https://models.inference.ai.azure.com/chat/completions";
 
@@ -21,7 +22,7 @@ function getGithubModelsApiEndpoint() {
   return `${configuredEndpoint.replace(/\/+$/, "")}/chat/completions`;
 }
 // POST /api/chat/message
-router.post("/message", async (req, res) => {
+router.post("/message", verifyToken, async (req, res) => {
   try {
     const { message, conversationHistory } = req.body;
 

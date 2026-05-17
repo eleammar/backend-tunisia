@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../src/db/connection');
 const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
 
-const OPENCAGE_KEY = '0a212fa57fab40598cd92aece8172f6d';
+const OPENCAGE_KEY = '254b914b13c645fc8a17206dff09d991';
 
 // 🔹 Fonction géocodage
 async function getCoordinates(address) {
@@ -94,6 +95,8 @@ router.get('/category/:categoryId', async (req, res) => {
 //
 router.post('/', async (req, res) => {
   try {
+    console.log("BODY:", req.body);
+
     const {
       name,
       description,
@@ -109,34 +112,35 @@ router.post('/', async (req, res) => {
       city_id
     } = req.body;
 
-    // 🔥 coordonnées auto
     const coords = await getCoordinates(address);
-    const lat = coords ? coords.lat : null;
-    const lng = coords ? coords.lng : null;
+
+    const lat = req.body.lat || (coords ? coords.lat : null);
+    const lng = req.body.lng || (coords ? coords.lng : null);
 
     const result = await pool.query(
       `INSERT INTO places (
-        name, description, duration, category_id, image,
+        id, name, description, duration, category_id, image,
         tags, rating, reviews, price, open_hours,
         address, city_id, lat, lng
       ) VALUES (
-        $1,$2,$3,$4,$5,
-        $6,$7,$8,$9,$10,
-        $11,$12,$13,$14
+        $1,$2,$3,$4,$5,$6,
+        $7,$8,$9,$10,$11,
+        $12,$13,$14,$15
       ) RETURNING *`,
       [
+        uuidv4(),
         name,
         description,
-        duration,
+        duration || null,
         category_id,
         image,
-        tags,
-        rating,
-        reviews,
+        tags || null,
+        rating ? parseFloat(rating) : null, // ✅ FIX
+        reviews || null,
         price || null,
         open_hours || null,
         address,
-        city_id,
+        city_id ? Number(city_id) : null, // ✅ FIX
         lat,
         lng
       ]
@@ -145,6 +149,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(result.rows[0]);
 
   } catch (err) {
+    console.error("ERROR:", err.message); // 👈 IMPORTANT
     res.status(500).json({ error: err.message });
   }
 });
@@ -169,10 +174,9 @@ router.put('/:id', async (req, res) => {
       city_id
     } = req.body;
 
-    // recalcul coordonnées
     const coords = await getCoordinates(address);
-    const lat = coords ? coords.lat : null;
-    const lng = coords ? coords.lng : null;
+    const lat = req.body.lat || (coords ? coords.lat : null);
+    const lng = req.body.lng || (coords ? coords.lng : null);
 
     const result = await pool.query(
       `UPDATE places SET
@@ -196,16 +200,16 @@ router.put('/:id', async (req, res) => {
       [
         name,
         description,
-        duration,
+        duration || null,
         category_id,
         image,
-        tags,
+        tags || null,
         rating,
-        reviews,
+        reviews || null,
         price || null,
         open_hours || null,
         address,
-        city_id,
+        city_id || null,
         lat,
         lng,
         req.params.id

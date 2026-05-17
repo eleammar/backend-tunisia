@@ -391,33 +391,57 @@ router.post('/', upload.single('image'), async (req, res) => {
     if (culture && culture.items && culture.items.length > 0) {
       for (let i = 0; i < culture.items.length; i++) {
         const item = culture.items[i];
-        await client.query(
-          `INSERT INTO culture_items (city_id, label, title, description, img, rating, display_order)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [cityId, item.label || '', item.title, item.description || '', item.img || '', item.rating || 0, i]
-        );
+        if (item.id) {
+          await client.query(
+            `INSERT INTO culture_items (id, city_id, label, title, description, img, rating, display_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [item.id, cityId, item.label || '', item.title, item.description || '', item.img || '', item.rating || 0, i]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO culture_items (city_id, label, title, description, img, rating, display_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [cityId, item.label || '', item.title, item.description || '', item.img || '', item.rating || 0, i]
+          );
+        }
       }
     }
 
     // 5. Insert events
     if (events && events.length > 0) {
       for (const event of events) {
-        await client.query(
-          `INSERT INTO events (city_id, date, name, img)
-           VALUES ($1, $2, $3, $4)`,
-          [cityId, event.date, event.name, event.img || '']
-        );
+        if (event.id) {
+          await client.query(
+            `INSERT INTO events (id, city_id, date, name, img)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [event.id, cityId, event.date, event.name, event.img || '']
+          );
+        } else {
+          await client.query(
+            `INSERT INTO events (city_id, date, name, img)
+             VALUES ($1, $2, $3, $4)`,
+            [cityId, event.date, event.name, event.img || '']
+          );
+        }
       }
     }
 
     // 6. Insert experiences (activities)
     if (experiences && experiences.length > 0) {
       for (const exp of experiences) {
-        await client.query(
-          `INSERT INTO experiences (city_id, name, type, rating, img)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [cityId, exp.name, exp.type || '', exp.r || 0, exp.img || '']
-        );
+        if (exp.id) {
+          await client.query(
+            `INSERT INTO experiences (id, city_id, name, type, rating, img)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [exp.id, cityId, exp.name, exp.type || '', exp.r || 0, exp.img || '']
+          );
+        } else {
+          await client.query(
+            `INSERT INTO experiences (city_id, name, type, rating, img)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [cityId, exp.name, exp.type || '', exp.r || 0, exp.img || '']
+          );
+        }
       }
     }
 
@@ -473,11 +497,21 @@ router.post('/', upload.single('image'), async (req, res) => {
     if (hotels && hotels.length > 0) {
       for (let i = 0; i < hotels.length; i++) {
         const hotel = hotels[i];
-        await client.query(
-          `INSERT INTO hotels (city_id, name, distance, img, rating, price, display_order)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [cityId, hotel.n, hotel.dist || 0, hotel.img || '', hotel.r || 0, hotel.price || 0, i]
-        );
+        if (hotel.id) {
+          // Use provided ID if available
+          await client.query(
+            `INSERT INTO hotels (id, city_id, name, distance, img, rating, price, display_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [hotel.id, cityId, hotel.n, hotel.dist || 0, hotel.img || '', hotel.r || 0, hotel.price || 0, i]
+          );
+        } else {
+          // Let auto-increment handle it
+          await client.query(
+            `INSERT INTO hotels (city_id, name, distance, img, rating, price, display_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [cityId, hotel.n, hotel.dist || 0, hotel.img || '', hotel.r || 0, hotel.price || 0, i]
+          );
+        }
       }
     }
 
@@ -659,11 +693,19 @@ router.put('/:id', async (req, res) => {
     if (culture && culture.items && culture.items.length > 0) {
       for (let i = 0; i < culture.items.length; i++) {
         const item = culture.items[i];
-        await client.query(
-          `INSERT INTO culture_items (city_id, label, title, description, img, rating, display_order)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [cityId, item.label || '', item.title, item.description || '', item.img || '', item.rating || 0, i]
-        );
+        if (item.id) {
+          await client.query(
+            `INSERT INTO culture_items (id, city_id, label, title, description, img, rating, display_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [item.id, cityId, item.label || '', item.title, item.description || '', item.img || '', item.rating || 0, i]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO culture_items (city_id, label, title, description, img, rating, display_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [cityId, item.label || '', item.title, item.description || '', item.img || '', item.rating || 0, i]
+          );
+        }
       }
     }
 
@@ -671,11 +713,19 @@ router.put('/:id', async (req, res) => {
     await client.query('DELETE FROM events WHERE city_id = $1', [cityId]);
     if (events && events.length > 0) {
       for (const event of events) {
-        await client.query(
-          `INSERT INTO events (city_id, date, name, img)
-           VALUES ($1, $2, $3, $4)`,
-          [cityId, event.date, event.name, event.img || '']
-        );
+        if (event.id) {
+          await client.query(
+            `INSERT INTO events (id, city_id, date, name, img)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [event.id, cityId, event.date, event.name, event.img || '']
+          );
+        } else {
+          await client.query(
+            `INSERT INTO events (city_id, date, name, img)
+             VALUES ($1, $2, $3, $4)`,
+            [cityId, event.date, event.name, event.img || '']
+          );
+        }
       }
     }
 
@@ -683,11 +733,19 @@ router.put('/:id', async (req, res) => {
     await client.query('DELETE FROM experiences WHERE city_id = $1', [cityId]);
     if (experiences && experiences.length > 0) {
       for (const exp of experiences) {
-        await client.query(
-          `INSERT INTO experiences (city_id, name, type, rating, img)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [cityId, exp.name, exp.type || '', exp.r || 0, exp.img || '']
-        );
+        if (exp.id) {
+          await client.query(
+            `INSERT INTO experiences (id, city_id, name, type, rating, img)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [exp.id, cityId, exp.name, exp.type || '', exp.r || 0, exp.img || '']
+          );
+        } else {
+          await client.query(
+            `INSERT INTO experiences (city_id, name, type, rating, img)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [cityId, exp.name, exp.type || '', exp.r || 0, exp.img || '']
+          );
+        }
       }
     }
 
@@ -740,11 +798,21 @@ router.put('/:id', async (req, res) => {
     if (hotels && hotels.length > 0) {
       for (let i = 0; i < hotels.length; i++) {
         const hotel = hotels[i];
-        await client.query(
-          `INSERT INTO hotels (city_id, name, distance, img, rating, price, display_order)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [cityId, hotel.n, hotel.dist || 0, hotel.img || '', hotel.r || 0, hotel.price || 0, i]
-        );
+        if (hotel.id) {
+          // Use provided ID if available
+          await client.query(
+            `INSERT INTO hotels (id, city_id, name, distance, img, rating, price, display_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [hotel.id, cityId, hotel.n, hotel.dist || 0, hotel.img || '', hotel.r || 0, hotel.price || 0, i]
+          );
+        } else {
+          // Let auto-increment handle it
+          await client.query(
+            `INSERT INTO hotels (city_id, name, distance, img, rating, price, display_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [cityId, hotel.n, hotel.dist || 0, hotel.img || '', hotel.r || 0, hotel.price || 0, i]
+          );
+        }
       }
     }
 

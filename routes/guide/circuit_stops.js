@@ -44,28 +44,50 @@ router.get('/one/:id', async (req, res) => {
 // 🔄 REORDER STOPS (mettre avant /:circuitId)
 //
 router.put('/reorder/:circuitId', async (req, res) => {
+  const client = await pool.connect();
+
   try {
     const { circuitId } = req.params;
     const { stops } = req.body;
 
-    const queries = stops.map(stop => {
-      return pool.query(
+    if (!stops || !Array.isArray(stops)) {
+      return res.status(400).json({ error: 'stops array required' });
+    }
+
+    await client.query('BEGIN');
+
+   
+    for (const stop of stops) {
+      await client.query(
+        `UPDATE circuit_stops
+         SET stop_order = stop_order + 1000
+         WHERE id = $1 AND circuit_id = $2`,
+        [Number(stop.id), circuitId]
+      );
+    }
+
+   
+    for (const stop of stops) {
+      await client.query(
         `UPDATE circuit_stops
          SET stop_order = $1
          WHERE id = $2 AND circuit_id = $3`,
-        [stop.stop_order, stop.id, circuitId]
+        [Number(stop.stop_order), Number(stop.id), circuitId]
       );
-    });
+    }
 
-    await Promise.all(queries);
+    await client.query('COMMIT');
 
-    res.json({ message: 'Stops reordered' });
+    res.json({ message: 'Stops reordered successfully' });
 
   } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
-
 //
 // 🔍 GET STOPS BY CIRCUIT (mettre APRÈS)
 //
