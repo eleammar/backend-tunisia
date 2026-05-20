@@ -168,6 +168,7 @@ res.json(allcities.rows[0].jsonb_agg);
 });
 
 router.get('/questionReponse', async (req, res) => {
+  let userId = req.query.user_id;
 
   try {
 const questionReponse = await pool.query(
@@ -212,21 +213,26 @@ FROM (
             ) AS options
 
         FROM public.user_answers usan
-        JOIN public.steps ste ON ste.id = usan.step_id
-        JOIN public.options opt ON opt.id = usan.option_id
+        left JOIN public.steps ste ON ste.id = usan.step_id
+       left JOIN public.options opt ON opt.id = usan.option_id
 
         GROUP BY 
             usan.user_id,
             ste.id, ste.title, ste.description, ste.multi, ste.order_index
     ) AS step_data
 
-    JOIN public.users us ON us.id = step_data.user_id
+     JOIN public.users us ON us.id = step_data.user_id
+
+	 where us.id=$1
 
     GROUP BY us.id, us.full_name, us.email, us.role, us.onboarding_completed
     ORDER BY us.id
-) final_data;`
+) final_data;`,
+ [userId]
     );
-
+if(questionReponse.rows.length === 0 || questionReponse.rows[0].json_agg === null){
+  return res.status(404).json({ error: "No data found for the given user ID" });
+}
 res.json(questionReponse.rows[0].json_agg);
   } catch (err) {
     console.error("Error fetching cities:", err);
@@ -234,59 +240,35 @@ res.json(questionReponse.rows[0].json_agg);
   }
 });
 
-// Generate recommendations using n8n AI (must come BEFORE generic /:userId route)
 router.get('/n8n/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-
-    // Get user data
-    const userRes = await pool.query(
-      `SELECT id, full_name, email FROM users WHERE id = $1`,
-      [userId]
+   
+    const recRes = await pool.query(
+      `SELECT * FROM recommendations WHERE user_id = $1`,
+      [parseInt(userId)]
     );
 
-    if (userRes.rows.length === 0) {
-      return res.status(404).json({ error: "User not found" });
-    }
+    if (recRes.rows.length > 0) {
+   const recommendation = recRes.rows[0];
 
-    const user = userRes.rows[0];
-
-    // Get user's answers to onboarding questions
-    const userAnswersRes = await pool.query(
-      `SELECT 
-        ste.id as step_id,
-        ste.title as step_title,
-        opt.id as option_id,
-        opt.title as option_title,
-        opt.subtitle as option_subtitle
-       FROM user_answers usan
-       JOIN steps ste ON ste.id = usan.step_id
-       JOIN options opt ON opt.id = usan.option_id
-       WHERE usan.user_id = $1
-       ORDER BY ste.order_index`,
-      [userId]
-    );
-
-    // Format user answers for n8n
-    const userAnswers = userAnswersRes.rows.map(row => ({
-      step: row.step_title,
-      answer: row.option_title,
-      subtitle: row.option_subtitle
-    }));
-
-    // Send user data to n8n webhook
-    const n8nPayload = {
+    res.json({
+      success: true,
       userId,
-      user_name: user.full_name,
-      user_email: user.email,
-      user_answers: userAnswers
-    };
+      created_at: recommendation.created_at,
+      updated_at: recommendation.updated_at,
+      data: {
+        recommended_cities: recommendation.recommended_cities,
+        recommended_places: recommendation.recommended_places,
+        recommended_events: recommendation.recommended_events,
+        recommended_experiences: recommendation.recommended_experiences
+      }
+    });    }
+    else{
 
-    console.log("Sending to n8n:", n8nPayload);
-
-    const response = await axios.post(
-      "http://localhost:5678/webhook-test/330b9488-ac5e-4801-8028-d046f13760ca",
-      n8nPayload
+    const response = await axios.get(
+      "http://localhost:5678/webhook-test/330b9488-ac5e-4801-8028-d046f13760ca?user_id=" + userId
+      
     );
 
     const aiData = response.data;
@@ -348,7 +330,6 @@ router.get('/n8n/:userId', async (req, res) => {
       return db ? { ...db, score: item.score, why: item.why } : item;
     });
 
-    // Save recommendations to database
     await pool.query(
       `INSERT INTO recommendations (user_id, recommended_cities, recommended_places, recommended_events, recommended_experiences)
        VALUES ($1, $2, $3, $4, $5)
@@ -370,7 +351,6 @@ router.get('/n8n/:userId', async (req, res) => {
     res.json({
       success: true,
       userId,
-      user_name: user.full_name,
       data: {
         recommended_cities: enrichedCities,
         recommended_places: enrichedPlaces,
@@ -379,122 +359,14 @@ router.get('/n8n/:userId', async (req, res) => {
       }
     });
 
+    }
+    
   } catch (err) {
     console.error("Error fetching recommendations:", err);
     res.status(500).json({ error: "Internal server error", details: err.message });
   }
 });
 
-// GET recommendations for a specific user (retrieve from database)
-// This must come AFTER /n8n/:userId so more specific routes are matched first
-router.get('/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
 
-    // Validate that userId is a number
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: "Invalid userId. Please provide a numeric user ID." });
-    }
-
-    const recRes = await pool.query(
-      `SELECT * FROM recommendations WHERE user_id = $1`,
-      [parseInt(userId)]
-    );
-
-    if (recRes.rows.length === 0) {
-      return res.status(404).json({ error: "No recommendations found for this user. Please generate recommendations first by calling /n8n/:userId" });
-    }
-
-    const recommendation = recRes.rows[0];
-
-    res.json({
-      success: true,
-      userId,
-      created_at: recommendation.created_at,
-      updated_at: recommendation.updated_at,
-      data: {
-        recommended_cities: recommendation.recommended_cities,
-        recommended_places: recommendation.recommended_places,
-        recommended_events: recommendation.recommended_events,
-        recommended_experiences: recommendation.recommended_experiences
-      }
-    });
-
-  } catch (err) {
-    console.error("Error fetching recommendations:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-
-router.post('/save', async (req, res) => {
-  try {
-    const {
-      userId,
-      recommended_cities,
-      recommended_places,
-      recommended_events,
-      recommended_experiences
-    } = req.body;
-
-    const cleanUserId = parseInt(String(userId).replace(/[^0-9]/g, ''));
-
-    if (!cleanUserId || isNaN(cleanUserId)) {
-      return res.status(400).json({ error: "userId is required and must be a number" });
-    }
-
-    const cities  = recommended_cities    || [];
-    const places  = recommended_places    || [];
-    const events  = recommended_events    || [];
-    const exps    = recommended_experiences || [];
-
-    const cityIds  = cities.map(c => c.id).filter(Boolean);
-    const placeIds = places.map(p => p.id).filter(Boolean);
-    const eventIds = events.map(e => e.id).filter(Boolean);
-    const expIds   = exps.map(e => e.id).filter(Boolean);
-
-    const [citiesRes, placesRes, eventsRes, expsRes] = await Promise.all([
-      cityIds.length  ? pool.query(`SELECT ct.id, ct.name, ct.map_src, hs.description, hs.bg FROM cities ct LEFT JOIN hero_sections hs ON hs.city_id = ct.id WHERE ct.id = ANY($1::int[])`, [cityIds])  : { rows: [] },
-      placeIds.length ? pool.query(`SELECT p.* FROM places p WHERE p.id = ANY($1::text[])`, [placeIds]) : { rows: [] },
-      eventIds.length ? pool.query(`SELECT e.id, e.city_id, e.name, e.date, e.img, e.category FROM events e WHERE e.id = ANY($1::int[])`, [eventIds]) : { rows: [] },
-      expIds.length   ? pool.query(`SELECT ex.id, ex.city_id, ex.name, ex.type, ex.rating, ex.img FROM experiences ex WHERE ex.id = ANY($1::int[])`, [expIds]) : { rows: [] }
-    ]);
-
-    const citiesMap = Object.fromEntries(citiesRes.rows.map(r => [r.id, r]));
-    const placesMap = Object.fromEntries(placesRes.rows.map(r => [r.id, r]));
-    const eventsMap = Object.fromEntries(eventsRes.rows.map(r => [r.id, r]));
-    const expsMap   = Object.fromEntries(expsRes.rows.map(r => [r.id, r]));
-
-    const enrichedCities      = cities.map(item => { const db = citiesMap[item.id]; return db ? { ...db, score: item.score, why: item.why, headline: item.headline } : item; });
-    const enrichedPlaces      = places.map(item => { const db = placesMap[item.id]; return db ? { ...db, score: item.score, why: item.why } : item; });
-    const enrichedEvents      = events.map(item => { const db = eventsMap[item.id]; return db ? { ...db, score: item.score, why: item.why } : item; });
-    const enrichedExperiences = exps.map(item   => { const db = expsMap[item.id];   return db ? { ...db, score: item.score, why: item.why } : item; });
-
-    await pool.query(
-      `INSERT INTO recommendations
-        (user_id, recommended_cities, recommended_places, recommended_events, recommended_experiences)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (user_id) DO UPDATE SET
-         recommended_cities    = $2,
-         recommended_places    = $3,
-         recommended_events    = $4,
-         recommended_experiences = $5,
-         updated_at = CURRENT_TIMESTAMP`,
-      [
-        cleanUserId,
-        JSON.stringify(enrichedCities),
-        JSON.stringify(enrichedPlaces),
-        JSON.stringify(enrichedEvents),
-        JSON.stringify(enrichedExperiences)
-      ]
-    );
-
-    res.json({ success: true, userId: cleanUserId });
-
-  } catch (err) {
-    console.error("Error saving recommendations:", err);
-    res.status(500).json({ error: "Internal server error", details: err.message });
-  }
-});
 
 module.exports = router;
