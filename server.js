@@ -49,6 +49,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.use('/api/guide', guideRoutes);
 // Routes d'authentification
 app.use('/api/auth', require('./routes/auth/auth'));
+// Routes d'authentification admin (table admins séparée)
+app.use('/api/admin/auth', require('./routes/auth/adminAuth'));
 // Routes d'onboarding
 app.use('/api/onboarding', require('./routes/onboarding/onboardingRoutes.js'));
 // Routes de tags
@@ -77,6 +79,7 @@ app.listen(port, () => console.log(`
     Delegations API: http://localhost:${port}/api/delegations
     guide touristique API: http://localhost:${port}/api/guide
     Auth API: http://localhost:${port}/api/auth
+    Admin Auth API: http://localhost:${port}/api/admin/auth
     Onboarding API: http://localhost:${port}/api/onboarding
     Tags API: http://localhost:${port}/api/tags
     Tag Assignment API: http://localhost:${port}/api/tags/assign

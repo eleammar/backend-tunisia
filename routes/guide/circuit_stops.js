@@ -113,19 +113,26 @@ router.get('/:circuitId', async (req, res) => {
 //
 router.post('/', async (req, res) => {
   try {
-    const { circuit_id, place_id, start_time, stop_order } = req.body;
+    const { circuit_id, place_id, start_time } = req.body;
+
+    const maxRes = await pool.query(
+      'SELECT COALESCE(MAX(stop_order), 0) + 1 AS next_order FROM circuit_stops WHERE circuit_id = $1',
+      [circuit_id]
+    );
+    const stop_order = maxRes.rows[0].next_order;
 
     const result = await pool.query(
-      `INSERT INTO circuit_stops 
+      `INSERT INTO circuit_stops
        (circuit_id, place_id, start_time, stop_order)
        VALUES ($1,$2,$3,$4)
        RETURNING *`,
-      [circuit_id, place_id, start_time, stop_order]
+      [circuit_id, place_id, start_time || null, stop_order]
     );
 
     res.status(201).json(result.rows[0]);
 
   } catch (err) {
+    console.error('[circuit_stops POST]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

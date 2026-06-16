@@ -24,6 +24,34 @@ router.get('/city/:cityId', async (req, res) => {
   }
 });
 
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const circuits = await pool.query(
+      'SELECT * FROM circuits WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.params.userId]
+    );
+
+    const results = await Promise.all(
+      circuits.rows.map(async circuit => {
+        const stops = await pool.query(
+          `SELECT cs.*, p.name, p.lat, p.lng, p.image, p.duration, p.rating, p.reviews,
+                  p.category_id, p.tags, p.address, p.open_hours, p.price
+           FROM circuit_stops cs
+           JOIN places p ON cs.place_id = p.id
+           WHERE cs.circuit_id = $1
+           ORDER BY cs.stop_order`,
+          [circuit.id]
+        );
+        return { ...circuit, stops: stops.rows };
+      })
+    );
+
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const circuit = await pool.query('SELECT * FROM circuits WHERE id = $1', [req.params.id]);

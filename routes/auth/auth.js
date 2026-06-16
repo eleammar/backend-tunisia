@@ -208,6 +208,51 @@ router.post('/google', async (req, res) => {
 
 
 // =======================
+// QR SESSION — stockage en mémoire (code court 6 cars, TTL 2 min)
+// =======================
+const qrSessions = new Map(); // code -> { jwt, expiresAt }
+
+const generateCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+
+// PC connecté → génère un code court lié à son JWT
+router.post('/qr-session', verifyToken, async (req, res) => {
+  // Nettoyer les codes expirés
+  const now = Date.now();
+  for (const [k, v] of qrSessions) {
+    if (v.expiresAt < now) qrSessions.delete(k);
+  }
+
+  const code = generateCode();
+  const userJwt = req.headers.authorization.split(' ')[1];
+
+  qrSessions.set(code, { jwt: userJwt, expiresAt: now + 2 * 60 * 1000 });
+
+  console.log('[QR] created code', code, 'for token', userJwt.slice(0, 20) + '...');
+
+  res.json({ code });
+});
+
+// Mobile → échange le code contre le JWT
+router.get('/qr-session/:code', async (req, res) => {
+  const key = req.params.code.toUpperCase();
+  const session = qrSessions.get(key);
+
+  console.log('[QR] exchange request for code', key, '| known codes =', [...qrSessions.keys()], '| found =', !!session);
+
+  if (!session) {
+    return res.status(404).json({ error: 'Code invalide ou expiré' });
+  }
+
+  if (session.expiresAt < Date.now()) {
+    qrSessions.delete(req.params.code.toUpperCase());
+    return res.status(410).json({ error: 'Code expiré' });
+  }
+
+  qrSessions.delete(req.params.code.toUpperCase()); // usage unique
+  res.json({ token: session.jwt });
+});
+
+// =======================
 // GET CURRENT USER
 // =======================
 router.get('/me', verifyToken, async (req, res) => {

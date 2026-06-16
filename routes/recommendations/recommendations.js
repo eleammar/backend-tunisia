@@ -167,6 +167,58 @@ res.json(allcities.rows[0].jsonb_agg);
   }
 });
 
+router.get('/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.full_name, u.email, u.onboarding_completed,
+              COUNT(DISTINCT ua.step_id) AS answer_count,
+              CASE WHEN r.user_id IS NOT NULL THEN true ELSE false END AS has_recommendation,
+              r.updated_at AS recommendation_updated_at
+       FROM public.users u
+       LEFT JOIN public.user_answers ua ON ua.user_id = u.id
+       LEFT JOIN public.recommendations r ON r.user_id = u.id
+       GROUP BY u.id, u.full_name, u.email, u.onboarding_completed, r.user_id, r.updated_at
+       ORDER BY has_recommendation DESC, u.id ASC
+`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/stats', async (req, res) => {
+  try {
+    const monthly = await pool.query(
+      `SELECT
+         TO_CHAR(updated_at, 'YYYY-MM') AS month,
+         TO_CHAR(updated_at, 'Mon')     AS month_label,
+         COUNT(*)::int                  AS total
+       FROM public.recommendations
+       GROUP BY TO_CHAR(updated_at, 'YYYY-MM'), TO_CHAR(updated_at, 'Mon')
+       ORDER BY month ASC`
+    );
+
+    const totals = await pool.query(
+      `SELECT
+         COUNT(*)::int                                             AS total_reco,
+         COUNT(*) FILTER (WHERE updated_at >= NOW() - INTERVAL '30 days')::int AS last_30d,
+         COUNT(*) FILTER (WHERE updated_at >= NOW() - INTERVAL '7 days')::int  AS last_7d,
+         MAX(updated_at)                                           AS last_generated
+       FROM public.recommendations`
+    );
+
+    res.json({
+      monthly: monthly.rows,
+      totals:  totals.rows[0],
+    });
+  } catch (err) {
+    console.error('Error fetching stats:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/questionReponse', async (req, res) => {
   let userId = req.query.user_id;
 
@@ -267,7 +319,7 @@ router.get('/n8n/:userId', async (req, res) => {
     else{
 
     const response = await axios.get(
-      "http://localhost:5678/webhook-test/330b9488-ac5e-4801-8028-d046f13760ca?user_id=" + userId
+      "http://localhost:5678/webhook/330b9488-ac5e-4801-8028-d046f13760ca?user_id=" + userId
       
     );
 
